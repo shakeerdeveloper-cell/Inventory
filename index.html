@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grocery Manager POS</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f7f6; padding: 15px; margin: 0; }
-        #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); min-height: 250px; }
         
         /* Mode Control Buttons */
         .mode-container { margin: 15px 0; }
@@ -39,7 +39,7 @@
     </div>
 
     <div id="reader"></div>
-    <div id="status-message" class="scanning">Ready to scan...</div>
+    <div id="status-message" class="scanning">Initializing camera scanner...</div>
 
     <div id="sell-card" class="card">
         <h3 id="sell-product-title" style="color: #dc3545; margin-top:0;">Product Name</h3>
@@ -72,8 +72,9 @@
     </div>
 
     <script>
-        // PASTE YOUR GOOGLE WEB APP URL INSIDE THE QUOTES BELOW
+        // REPLACE THIS STRING WITH YOUR DEPLOYED GOOGLE APPS SCRIPT URL
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwmBaqrtPcxKKo150nmGL5uCc70xYLuZQhLc6n7UwtRBtvSE7qmF4nogUeliRuu90UyBg/exec"; 
+        
         let currentMode = 'sell';
         let isProcessing = false;
         let activeBarcode = "";
@@ -98,7 +99,6 @@
             document.getElementById('restock-card').style.display = "none";
         }
 
-        // Triggered automatically when phone camera captures a barcode line layout
         function onScanSuccess(decodedText) {
             if (isProcessing) return;
             isProcessing = true;
@@ -109,7 +109,6 @@
             statusMsg.innerText = "Querying item database...";
             hideAllCards();
 
-            // Fetch current item metrics from sheet
             fetch(WEB_APP_URL, {
                 method: "POST",
                 body: JSON.stringify({ barcode: decodedText, action: "get_details" })
@@ -130,7 +129,6 @@
                         isProcessing = false; 
                     }
                 } else { 
-                    // Restock Mode Configuration
                     document.getElementById('restock-barcode-text').innerText = activeBarcode;
                     document.getElementById('restock-card').style.display = "block";
                     
@@ -148,6 +146,11 @@
                         document.getElementById('restock-selling').value = "";
                     }
                 }
+            })
+            .catch(err => {
+                statusMsg.className = "error";
+                statusMsg.innerText = "Database connection error. Check Web App URL.";
+                isProcessing = false;
             });
         }
 
@@ -208,9 +211,22 @@
             });
         }
 
-        // Initialize the HTML5 barcode scanner tool targeting rear camera setup
-        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: { width: 280, height: 160 } }, false);
-        html5QrcodeScanner.render(onScanSuccess);
+        // Safe Initialization Block with Live Visible Error Handling
+        try {
+            const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: { width: 280, height: 160 } }, false);
+            html5QrcodeScanner.render(onScanSuccess);
+            
+            // If it succeeds to load, change status text
+            setTimeout(() => {
+                const statusMsg = document.getElementById('status-message');
+                if (statusMsg.innerText === "Initializing camera scanner...") {
+                    statusMsg.innerText = "Ready to scan. Align product barcode inside box.";
+                }
+            }, 1000);
+        } catch (e) {
+            document.getElementById('status-message').className = "error";
+            document.getElementById('status-message').innerText = "Scanner initialization failed: " + e.message + ". Ensure you are using HTTPS:// link on your mobile phone.";
+        }
     </script>
 </body>
 </html>
