@@ -21,12 +21,15 @@
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
         .scanning { background: #e2e3e5; color: #383d41; }
+        .test-btn { background: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <h2>Grocery Inventory POS</h2>
     
+    <button class="test-btn" onclick="testDatabaseConnection()">⚡ Test Sheet Connection</button>
+
     <div class="mode-container">
         <button id="btn-sell" class="mode-btn active-sell" onclick="setMode('sell')">Cart (Sell Items)</button>
         <button id="btn-restock" class="mode-btn inactive" onclick="setMode('restock')">Intake (Restock)</button>
@@ -85,6 +88,27 @@
             document.getElementById('restock-card').style.display = "none";
         }
 
+        // Diagnostic connection test function
+        function testDatabaseConnection() {
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = "scanning";
+            statusMsg.innerText = "Sending safe ping to Google Sheets...";
+            
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({ barcode: "TEST12345", action: "get_details" })
+            })
+            .then(res => res.json())
+            .then(data => {
+                statusMsg.className = "success";
+                statusMsg.innerText = "Connection Perfect! Google Sheets responded smoothly. Status: " + data.status;
+            })
+            .catch(err => {
+                statusMsg.className = "error";
+                statusMsg.innerText = "Test Failed: " + err.message + ". Double-check your URL and Apps Script Deploy settings.";
+            });
+        }
+
         function onScanSuccess(decodedText) {
             if (isProcessing) return;
             isProcessing = true;
@@ -95,57 +119,50 @@
             statusMsg.innerText = "Connecting to Google Sheets...";
             hideAllCards();
 
-            // Explicitly forcing text/plain header prevents CORS preflight errors from Google
+            // Completely removed headers structure to bypass CORS Preflight walls
             fetch(WEB_APP_URL, {
                 method: "POST",
-                headers: { "Content-Type": "text/plain" },
                 body: JSON.stringify({ barcode: decodedText, action: "get_details" })
             })
             .then(res => {
-                if (!res.ok) throw new Error("Google Server returned HTTP status " + res.status);
-                return res.text(); // Read raw text output to catch hidden errors
+                if (!res.ok) throw new Error("HTTP Error " + res.status);
+                return res.json();
             })
-            .then(rawText => {
-                try {
-                    const data = JSON.parse(rawText);
-                    if (currentMode === 'sell') {
-                        if (data.status === "found") {
-                            statusMsg.innerText = "Item recognized.";
-                            document.getElementById('sell-product-title').innerText = data.productName;
-                            document.getElementById('sell-barcode-text').innerText = activeBarcode;
-                            document.getElementById('sell-current-stock').innerText = data.currentStock;
-                            document.getElementById('sell-qty').value = "1"; 
-                            document.getElementById('sell-card').style.display = "block";
-                        } else {
-                            statusMsg.className = "error";
-                            statusMsg.innerText = "Product not found in Google Sheets! Switch to Restock Mode to add it.";
-                            isProcessing = false; 
-                        }
-                    } else { 
-                        document.getElementById('restock-barcode-text').innerText = activeBarcode;
-                        document.getElementById('restock-card').style.display = "block";
-                        if (data.status === "found") {
-                            statusMsg.innerText = "Existing product recognized.";
-                            document.getElementById('restock-name').value = data.productName;
-                            document.getElementById('restock-name').disabled = true; 
-                            document.getElementById('restock-cost').value = data.costPrice;
-                            document.getElementById('restock-selling').value = data.sellingPrice;
-                        } else {
-                            statusMsg.innerText = "New barcode discovered! Fill out details to add it.";
-                            document.getElementById('restock-name').value = "";
-                            document.getElementById('restock-name').disabled = false;
-                            document.getElementById('restock-cost').value = "";
-                            document.getElementById('restock-selling').value = "";
-                        }
+            .then(data => {
+                if (currentMode === 'sell') {
+                    if (data.status === "found") {
+                        statusMsg.innerText = "Item recognized.";
+                        document.getElementById('sell-product-title').innerText = data.productName;
+                        document.getElementById('sell-barcode-text').innerText = activeBarcode;
+                        document.getElementById('sell-current-stock').innerText = data.currentStock;
+                        document.getElementById('sell-qty').value = "1"; 
+                        document.getElementById('sell-card').style.display = "block";
+                    } else {
+                        statusMsg.className = "error";
+                        statusMsg.innerText = "Barcode not found in Google Sheets! Switch to Restock Mode to create it.";
+                        isProcessing = false; 
                     }
-                } catch(jsonErr) {
-                    // This catches if Google sends a broken HTML error response page instead of data
-                    throw new Error("Google sent an invalid response. Raw message: " + rawText.substring(0, 150));
+                } else { 
+                    document.getElementById('restock-barcode-text').innerText = activeBarcode;
+                    document.getElementById('restock-card').style.display = "block";
+                    if (data.status === "found") {
+                        statusMsg.innerText = "Existing product recognized.";
+                        document.getElementById('restock-name').value = data.productName;
+                        document.getElementById('restock-name').disabled = true; 
+                        document.getElementById('restock-cost').value = data.costPrice;
+                        document.getElementById('restock-selling').value = data.sellingPrice;
+                    } else {
+                        statusMsg.innerText = "New barcode discovered! Fill out details to add it.";
+                        document.getElementById('restock-name').value = "";
+                        document.getElementById('restock-name').disabled = false;
+                        document.getElementById('restock-cost').value = "";
+                        document.getElementById('restock-selling').value = "";
+                    }
                 }
             })
             .catch(err => {
                 statusMsg.className = "error";
-                statusMsg.innerText = "Error details: " + err.message;
+                statusMsg.innerText = "Network Error: " + err.message;
                 isProcessing = false;
             });
         }
@@ -157,7 +174,6 @@
 
             fetch(WEB_APP_URL, {
                 method: "POST",
-                headers: { "Content-Type": "text/plain" },
                 body: JSON.stringify({
                     barcode: activeBarcode,
                     action: "sell",
@@ -185,7 +201,6 @@
 
             fetch(WEB_APP_URL, {
                 method: "POST",
-                headers: { "Content-Type": "text/plain" },
                 body: JSON.stringify({
                     barcode: activeBarcode,
                     action: "restock",
@@ -212,12 +227,6 @@
         try {
             const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: { width: 280, height: 160 } }, false);
             html5QrcodeScanner.render(onScanSuccess);
-            setTimeout(() => {
-                const statusMsg = document.getElementById('status-message');
-                if (statusMsg.innerText === "Initializing camera scanner...") {
-                    statusMsg.innerText = "Scanner active. Ready for barcodes.";
-                }
-            }, 1000);
         } catch (e) {
             document.getElementById('status-message').className = "error";
             document.getElementById('status-message').innerText = "Scanner setup error: " + e.message;
