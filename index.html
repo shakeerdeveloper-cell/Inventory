@@ -62,7 +62,7 @@
     </div>
 
     <script>
-        // PASTE YOUR NEW GOOGLE WEB APP EXEC URL HERE
+        // PASTE YOUR GOOGLE WEB APP URL HERE
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZGYFyjYlE7feFqMmSD6dqsuVhyCX7OIc8JopPUfb_vupovgYUyXKD9b98lezXY2J-IA/exec"; 
         
         let currentMode = 'sell';
@@ -93,12 +93,11 @@
             statusMsg.className = "scanning";
             statusMsg.innerText = "Sending GET ping parameter to Google Sheets...";
             
-            // Sending parameters cleanly via the URL string mapping
             fetch(`${WEB_APP_URL}?barcode=TESTPING&action=get_details`)
             .then(res => res.json())
             .then(data => {
                 statusMsg.className = "success";
-                statusMsg.innerText = "Connection Perfect! Google Sheets responded smoothly bypassing security filters.";
+                statusMsg.innerText = "Connection Perfect! Google Sheets responded smoothly.";
             })
             .catch(err => {
                 statusMsg.className = "error";
@@ -175,7 +174,7 @@
                     hideAllCards();
                 } else {
                     statusMsg.className = "error";
-                    statusMsg.innerText = data.message;
+                    statusMsg.innerText = "Error: " + (data.message || "Failed to log sale.");
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
             })
@@ -201,7 +200,7 @@
                     hideAllCards();
                 } else {
                     statusMsg.className = "error";
-                    statusMsg.innerText = "Failed to update inventory.";
+                    statusMsg.innerText = "Error: " + (data.message || "Failed to save stock data.");
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
             })
