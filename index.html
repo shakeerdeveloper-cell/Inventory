@@ -8,26 +8,31 @@
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f7f6; padding: 15px; margin: 0; }
         #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); min-height: 250px; }
+        
         .mode-container { margin: 15px 0; }
         .mode-btn { padding: 12px 25px; font-size: 1rem; font-weight: bold; border: none; cursor: pointer; border-radius: 20px; margin: 0 5px; }
         .active-sell { background: #dc3545; color: white; }
         .active-restock { background: #28a745; color: white; }
         .inactive { background: #e2e3e5; color: #333; }
+        .test-btn { background: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+        
         .card { max-width: 410px; margin: 15px auto; padding: 20px; border-radius: 12px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); text-align: left; display: none; }
         label { font-weight: bold; color: #555; display: block; margin-top: 10px; }
         input { width: 100%; padding: 11px; margin: 6px 0 12px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
         .submit-btn { width: 100%; color: white; padding: 14px; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        
         #status-message { margin-top: 15px; font-size: 1rem; font-weight: bold; padding: 12px; border-radius: 8px; word-break: break-word; }
-        .success { background: #d4edda; color: #155724; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #28a745; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
         .scanning { background: #e2e3e5; color: #383d41; }
-        .test-btn { background: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+        
+        /* New Image Display Styles */
+        .product-img { width: 100%; max-height: 180px; object-fit: contain; margin-bottom: 15px; display: none; border-radius: 8px; }
     </style>
 </head>
 <body>
 
     <h2>Grocery Inventory POS</h2>
-    
     <button class="test-btn" onclick="testDatabaseConnection()">⚡ Test Sheet Connection</button>
 
     <div class="mode-container">
@@ -40,6 +45,9 @@
 
     <div id="sell-card" class="card">
         <h3 id="sell-product-title" style="color: #dc3545; margin-top:0;">Product Name</h3>
+        
+        <img id="sell-img" class="product-img" src="" onerror="this.style.display='none'">
+        
         <p><strong>Barcode:</strong> <span id="sell-barcode-text"></span></p>
         <p><strong>Available Stock:</strong> <span id="sell-current-stock" style="font-weight:bold;">0</span></p>
         <label>Quantity to Sell:</label>
@@ -49,6 +57,9 @@
 
     <div id="restock-card" class="card">
         <h3 style="color: #28a745; margin-top:0;">Inventory Restock Panel</h3>
+        
+        <img id="restock-img" class="product-img" src="" onerror="this.style.display='none'">
+        
         <p><strong>Barcode:</strong> <span id="restock-barcode-text"></span></p>
         <label>Product Name:</label>
         <input type="text" id="restock-name" placeholder="Item descriptive name">
@@ -58,16 +69,35 @@
         <input type="number" step="0.01" id="restock-cost" placeholder="0.00">
         <label>Selling Price (Per Unit):</label>
         <input type="number" step="0.01" id="restock-selling" placeholder="0.00">
+        
+        <label>Product Image URL (Optional):</label>
+        <input type="text" id="restock-image-url" placeholder="Paste public image link ending in .jpg or .png">
+        
         <button class="submit-btn" style="background: #28a745;" onclick="submitRestock()">Commit Inventory Restock</button>
     </div>
 
     <script>
-        // PASTE YOUR GOOGLE WEB APP URL HERE
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZGYFyjYlE7feFqMmSD6dqsuVhyCX7OIc8JopPUfb_vupovgYUyXKD9b98lezXY2J-IA/exec"; 
+        // PASTE YOUR NEW GOOGLE WEB APP URL HERE
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyEtjya6HQDPsKXxi-_SmLyT4eBt2ViOupDJOtMHFtvINeDFSxfpOLE2eymbMuvqayCPQ/exec"; 
         
         let currentMode = 'sell';
         let isProcessing = false;
         let activeBarcode = "";
+
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine'; 
+                oscillator.frequency.value = 850; 
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15); 
+            } catch (e) { console.log("Audio not supported."); }
+        }
 
         function setMode(mode) {
             currentMode = mode;
@@ -92,7 +122,6 @@
             const statusMsg = document.getElementById('status-message');
             statusMsg.className = "scanning";
             statusMsg.innerText = "Sending GET ping parameter to Google Sheets...";
-            
             fetch(`${WEB_APP_URL}?barcode=TESTPING&action=get_details`)
             .then(res => res.json())
             .then(data => {
@@ -109,6 +138,8 @@
             if (isProcessing) return;
             isProcessing = true;
             activeBarcode = decodedText;
+
+            playBeep();
 
             const statusMsg = document.getElementById('status-message');
             statusMsg.className = "scanning";
@@ -128,6 +159,16 @@
                         document.getElementById('sell-barcode-text').innerText = activeBarcode;
                         document.getElementById('sell-current-stock').innerText = data.currentStock;
                         document.getElementById('sell-qty').value = "1"; 
+                        
+                        // Handle Image Display
+                        const imgEl = document.getElementById('sell-img');
+                        if (data.imageUrl && data.imageUrl.length > 5) {
+                            imgEl.src = data.imageUrl;
+                            imgEl.style.display = "block";
+                        } else {
+                            imgEl.style.display = "none";
+                        }
+                        
                         document.getElementById('sell-card').style.display = "block";
                     } else {
                         statusMsg.className = "error";
@@ -135,21 +176,37 @@
                         isProcessing = false; 
                     }
                 } else { 
+                    // RESTOCK MODE DATA
                     document.getElementById('restock-barcode-text').innerText = activeBarcode;
-                    document.getElementById('restock-card').style.display = "block";
+                    
+                    const imgEl = document.getElementById('restock-img');
+                    
                     if (data.status === "found") {
                         statusMsg.innerText = "Existing product recognized.";
                         document.getElementById('restock-name').value = data.productName;
                         document.getElementById('restock-name').disabled = true; 
                         document.getElementById('restock-cost').value = data.costPrice;
                         document.getElementById('restock-selling').value = data.sellingPrice;
+                        document.getElementById('restock-image-url').value = data.imageUrl || "";
+                        
+                        if (data.imageUrl && data.imageUrl.length > 5) {
+                            imgEl.src = data.imageUrl;
+                            imgEl.style.display = "block";
+                        } else {
+                            imgEl.style.display = "none";
+                        }
+                        
                     } else {
                         statusMsg.innerText = "New barcode discovered! Fill out details to add it.";
                         document.getElementById('restock-name').value = "";
                         document.getElementById('restock-name').disabled = false;
                         document.getElementById('restock-cost').value = "";
                         document.getElementById('restock-selling').value = "";
+                        document.getElementById('restock-image-url').value = "";
+                        imgEl.style.display = "none";
                     }
+                    
+                    document.getElementById('restock-card').style.display = "block";
                 }
             })
             .catch(err => {
@@ -190,8 +247,10 @@
             const qty = document.getElementById('restock-qty').value;
             const cost = document.getElementById('restock-cost').value;
             const sell = document.getElementById('restock-selling').value;
+            const img = document.getElementById('restock-image-url').value;
 
-            fetch(`${WEB_APP_URL}?action=restock&barcode=${encodeURIComponent(activeBarcode)}&productName=${encodeURIComponent(name)}&quantity=${encodeURIComponent(qty)}&costPrice=${encodeURIComponent(cost)}&sellingPrice=${encodeURIComponent(sell)}`)
+            // Added imageUrl parameter to the fetch URL
+            fetch(`${WEB_APP_URL}?action=restock&barcode=${encodeURIComponent(activeBarcode)}&productName=${encodeURIComponent(name)}&quantity=${encodeURIComponent(qty)}&costPrice=${encodeURIComponent(cost)}&sellingPrice=${encodeURIComponent(sell)}&imageUrl=${encodeURIComponent(img)}`)
             .then(res => res.json())
             .then(data => {
                 if(data.status === "success") {
@@ -204,7 +263,7 @@
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
             })
-            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; isProcessing = false; });
+            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; is precautions = false; });
         }
 
         try {
