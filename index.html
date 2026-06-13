@@ -26,7 +26,6 @@
         .error { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
         .scanning { background: #e2e3e5; color: #383d41; }
         
-        /* New Image Display Styles */
         .product-img { width: 100%; max-height: 180px; object-fit: contain; margin-bottom: 15px; display: none; border-radius: 8px; }
     </style>
 </head>
@@ -160,7 +159,6 @@
                         document.getElementById('sell-current-stock').innerText = data.currentStock;
                         document.getElementById('sell-qty').value = "1"; 
                         
-                        // Handle Image Display
                         const imgEl = document.getElementById('sell-img');
                         if (data.imageUrl && data.imageUrl.length > 5) {
                             imgEl.src = data.imageUrl;
@@ -176,7 +174,6 @@
                         isProcessing = false; 
                     }
                 } else { 
-                    // RESTOCK MODE DATA
                     document.getElementById('restock-barcode-text').innerText = activeBarcode;
                     
                     const imgEl = document.getElementById('restock-img');
@@ -249,7 +246,6 @@
             const sell = document.getElementById('restock-selling').value;
             const img = document.getElementById('restock-image-url').value;
 
-            // Added imageUrl parameter to the fetch URL
             fetch(`${WEB_APP_URL}?action=restock&barcode=${encodeURIComponent(activeBarcode)}&productName=${encodeURIComponent(name)}&quantity=${encodeURIComponent(qty)}&costPrice=${encodeURIComponent(cost)}&sellingPrice=${encodeURIComponent(sell)}&imageUrl=${encodeURIComponent(img)}`)
             .then(res => res.json())
             .then(data => {
@@ -263,7 +259,7 @@
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
             })
-            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; is precautions = false; });
+            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; isProcessing = false; });
         }
 
         try {
