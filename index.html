@@ -62,8 +62,8 @@
     </div>
 
     <script>
-        // PASTE YOUR GOOGLE WEB APP URL HERE
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwmBaqrtPcxKKo150nmGL5uCc70xYLuZQhLc6n7UwtRBtvSE7qmF4nogUeliRuu90UyBg/exec"; 
+        // PASTE YOUR NEW GOOGLE WEB APP EXEC URL HERE
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZGYFyjYlE7feFqMmSD6dqsuVhyCX7OIc8JopPUfb_vupovgYUyXKD9b98lezXY2J-IA/exec"; 
         
         let currentMode = 'sell';
         let isProcessing = false;
@@ -88,24 +88,21 @@
             document.getElementById('restock-card').style.display = "none";
         }
 
-        // Diagnostic connection test function
         function testDatabaseConnection() {
             const statusMsg = document.getElementById('status-message');
             statusMsg.className = "scanning";
-            statusMsg.innerText = "Sending safe ping to Google Sheets...";
+            statusMsg.innerText = "Sending GET ping parameter to Google Sheets...";
             
-            fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({ barcode: "TEST12345", action: "get_details" })
-            })
+            // Sending parameters cleanly via the URL string mapping
+            fetch(`${WEB_APP_URL}?barcode=TESTPING&action=get_details`)
             .then(res => res.json())
             .then(data => {
                 statusMsg.className = "success";
-                statusMsg.innerText = "Connection Perfect! Google Sheets responded smoothly. Status: " + data.status;
+                statusMsg.innerText = "Connection Perfect! Google Sheets responded smoothly bypassing security filters.";
             })
             .catch(err => {
                 statusMsg.className = "error";
-                statusMsg.innerText = "Test Failed: " + err.message + ". Double-check your URL and Apps Script Deploy settings.";
+                statusMsg.innerText = "Test Failed: " + err.message;
             });
         }
 
@@ -119,13 +116,9 @@
             statusMsg.innerText = "Connecting to Google Sheets...";
             hideAllCards();
 
-            // Completely removed headers structure to bypass CORS Preflight walls
-            fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({ barcode: decodedText, action: "get_details" })
-            })
+            fetch(`${WEB_APP_URL}?barcode=${encodeURIComponent(decodedText)}&action=get_details`)
             .then(res => {
-                if (!res.ok) throw new Error("HTTP Error " + res.status);
+                if (!res.ok) throw new Error("HTTP Error Status " + res.status);
                 return res.json();
             })
             .then(data => {
@@ -172,14 +165,8 @@
             statusMsg.className = "scanning";
             statusMsg.innerText = "Saving sale...";
 
-            fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({
-                    barcode: activeBarcode,
-                    action: "sell",
-                    quantity: document.getElementById('sell-qty').value
-                })
-            })
+            const qty = document.getElementById('sell-qty').value;
+            fetch(`${WEB_APP_URL}?action=sell&barcode=${encodeURIComponent(activeBarcode)}&quantity=${encodeURIComponent(qty)}`)
             .then(res => res.json())
             .then(data => {
                 if(data.status === "success") {
@@ -191,7 +178,8 @@
                     statusMsg.innerText = data.message;
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
-            });
+            })
+            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; isProcessing = false; });
         }
 
         function submitRestock() {
@@ -199,17 +187,12 @@
             statusMsg.className = "scanning";
             statusMsg.innerText = "Saving stock...";
 
-            fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({
-                    barcode: activeBarcode,
-                    action: "restock",
-                    productName: document.getElementById('restock-name').value,
-                    quantity: document.getElementById('restock-qty').value,
-                    costPrice: document.getElementById('restock-cost').value,
-                    sellingPrice: document.getElementById('restock-selling').value
-                })
-            })
+            const name = document.getElementById('restock-name').value;
+            const qty = document.getElementById('restock-qty').value;
+            const cost = document.getElementById('restock-cost').value;
+            const sell = document.getElementById('restock-selling').value;
+
+            fetch(`${WEB_APP_URL}?action=restock&barcode=${encodeURIComponent(activeBarcode)}&productName=${encodeURIComponent(name)}&quantity=${encodeURIComponent(qty)}&costPrice=${encodeURIComponent(cost)}&sellingPrice=${encodeURIComponent(sell)}`)
             .then(res => res.json())
             .then(data => {
                 if(data.status === "success") {
@@ -221,7 +204,8 @@
                     statusMsg.innerText = "Failed to update inventory.";
                 }
                 setTimeout(() => { isProcessing = false; }, 2000);
-            });
+            })
+            .catch(err => { statusMsg.className = "error"; statusMsg.innerText = err.message; isProcessing = false; });
         }
 
         try {
