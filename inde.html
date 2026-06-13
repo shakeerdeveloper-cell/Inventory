@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grocery Manager POS</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f7f6; padding: 15px; margin: 0; }
+        #reader { width: 100%; max-width: 450px; margin: 15px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        /* Mode Control Buttons */
+        .mode-container { margin: 15px 0; }
+        .mode-btn { padding: 12px 25px; font-size: 1rem; font-weight: bold; border: none; cursor: pointer; border-radius: 20px; margin: 0 5px; }
+        .active-sell { background: #dc3545; color: white; }
+        .active-restock { background: #28a745; color: white; }
+        .inactive { background: #e2e3e5; color: #333; }
+
+        /* Dynamic Pop-up Cards */
+        .card { max-width: 410px; margin: 15px auto; padding: 20px; border-radius: 12px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); text-align: left; display: none; }
+        label { font-weight: bold; color: #555; display: block; margin-top: 10px; }
+        input { width: 100%; padding: 11px; margin: 6px 0 12px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+        .submit-btn { width: 100%; color: white; padding: 14px; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        
+        /* Interactive Feedback Banners */
+        #status-message { margin-top: 15px; font-size: 1.1rem; font-weight: bold; padding: 12px; border-radius: 8px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .scanning { background: #e2e3e5; color: #383d41; }
+    </style>
+</head>
+<body>
+
+    <h2>Grocery Inventory POS</h2>
+    
+    <div class="mode-container">
+        <button id="btn-sell" class="mode-btn active-sell" onclick="setMode('sell')">Cart (Sell Items)</button>
+        <button id="btn-restock" class="mode-btn inactive" onclick="setMode('restock')">Intake (Restock Stock)</button>
+    </div>
+
+    <div id="reader"></div>
+    <div id="status-message" class="scanning">Ready to scan...</div>
+
+    <div id="sell-card" class="card">
+        <h3 id="sell-product-title" style="color: #dc3545; margin-top:0;">Product Name</h3>
+        <p><strong>Barcode:</strong> <span id="sell-barcode-text"></span></p>
+        <p><strong>Available Stock Balance:</strong> <span id="sell-current-stock" style="font-weight:bold;">0</span></p>
+        
+        <label>Quantity to Sell:</label>
+        <input type="number" id="sell-qty" value="1" min="1">
+        
+        <button class="submit-btn" style="background: #dc3545;" onclick="submitSale()">Confirm & Log Sale</button>
+    </div>
+
+    <div id="restock-card" class="card">
+        <h3 style="color: #28a745; margin-top:0;">Inventory Restock Panel</h3>
+        <p><strong>Barcode:</strong> <span id="restock-barcode-text"></span></p>
+        
+        <label>Product Name:</label>
+        <input type="text" id="restock-name" placeholder="Item descriptive name">
+
+        <label>Quantity Received:</label>
+        <input type="number" id="restock-qty" value="10" min="1">
+
+        <label>Cost Price (Per Unit):</label>
+        <input type="number" step="0.01" id="restock-cost" placeholder="0.00">
+
+        <label>Selling Price (Per Unit):</label>
+        <input type="number" step="0.01" id="restock-selling" placeholder="0.00">
+
+        <button class="submit-btn" style="background: #28a745;" onclick="submitRestock()">Commit Inventory Restock</button>
+    </div>
+
+    <script>
+        // PASTE YOUR GOOGLE WEB APP URL INSIDE THE QUOTES BELOW
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwmBaqrtPcxKKo150nmGL5uCc70xYLuZQhLc6n7UwtRBtvSE7qmF4nogUeliRuu90UyBg/exec"; 
+        let currentMode = 'sell';
+        let isProcessing = false;
+        let activeBarcode = "";
+
+        function setMode(mode) {
+            currentMode = mode;
+            hideAllCards();
+            document.getElementById('status-message').className = "scanning";
+            document.getElementById('status-message').innerText = "Switched modes. Awaiting scan...";
+            
+            if(mode === 'sell') {
+                document.getElementById('btn-sell').className = "mode-btn active-sell";
+                document.getElementById('btn-restock').className = "mode-btn inactive";
+            } else {
+                document.getElementById('btn-sell').className = "mode-btn inactive";
+                document.getElementById('btn-restock').className = "mode-btn active-restock";
+            }
+        }
+
+        function hideAllCards() {
+            document.getElementById('sell-card').style.display = "none";
+            document.getElementById('restock-card').style.display = "none";
+        }
+
+        // Triggered automatically when phone camera captures a barcode line layout
+        function onScanSuccess(decodedText) {
+            if (isProcessing) return;
+            isProcessing = true;
+            activeBarcode = decodedText;
+
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = "scanning";
+            statusMsg.innerText = "Querying item database...";
+            hideAllCards();
+
+            // Fetch current item metrics from sheet
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({ barcode: decodedText, action: "get_details" })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (currentMode === 'sell') {
+                    if (data.status === "found") {
+                        statusMsg.innerText = "Item recognized. Provide sales volume.";
+                        document.getElementById('sell-product-title').innerText = data.productName;
+                        document.getElementById('sell-barcode-text').innerText = activeBarcode;
+                        document.getElementById('sell-current-stock').innerText = data.currentStock;
+                        document.getElementById('sell-qty').value = "1"; 
+                        document.getElementById('sell-card').style.display = "block";
+                    } else {
+                        statusMsg.className = "error";
+                        statusMsg.innerText = "Product configuration missing in database!";
+                        isProcessing = false; 
+                    }
+                } else { 
+                    // Restock Mode Configuration
+                    document.getElementById('restock-barcode-text').innerText = activeBarcode;
+                    document.getElementById('restock-card').style.display = "block";
+                    
+                    if (data.status === "found") {
+                        statusMsg.innerText = "Existing stock line recognized.";
+                        document.getElementById('restock-name').value = data.productName;
+                        document.getElementById('restock-name').disabled = true; 
+                        document.getElementById('restock-cost').value = data.costPrice;
+                        document.getElementById('restock-selling').value = data.sellingPrice;
+                    } else {
+                        statusMsg.innerText = "New line item discovered! Fill all details.";
+                        document.getElementById('restock-name').value = "";
+                        document.getElementById('restock-name').disabled = false;
+                        document.getElementById('restock-cost').value = "";
+                        document.getElementById('restock-selling').value = "";
+                    }
+                }
+            });
+        }
+
+        function submitSale() {
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = "scanning";
+            statusMsg.innerText = "Logging checkout data...";
+
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    barcode: activeBarcode,
+                    action: "sell",
+                    quantity: document.getElementById('sell-qty').value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === "success") {
+                    statusMsg.className = "success";
+                    statusMsg.innerText = data.message;
+                    hideAllCards();
+                } else {
+                    statusMsg.className = "error";
+                    statusMsg.innerText = data.message;
+                }
+                setTimeout(() => { isProcessing = false; }, 2000);
+            });
+        }
+
+        function submitRestock() {
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = "scanning";
+            statusMsg.innerText = "Injecting inventory balance adjustments...";
+
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    barcode: activeBarcode,
+                    action: "restock",
+                    productName: document.getElementById('restock-name').value,
+                    quantity: document.getElementById('restock-qty').value,
+                    costPrice: document.getElementById('restock-cost').value,
+                    sellingPrice: document.getElementById('restock-selling').value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === "success") {
+                    statusMsg.className = "success";
+                    statusMsg.innerText = data.message;
+                    hideAllCards();
+                } else {
+                    statusMsg.className = "error";
+                    statusMsg.innerText = "Failed operational update execution.";
+                }
+                setTimeout(() => { isProcessing = false; }, 2000);
+            });
+        }
+
+        // Initialize the HTML5 barcode scanner tool targeting rear camera setup
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: { width: 280, height: 160 } }, false);
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+</body>
+</html>
